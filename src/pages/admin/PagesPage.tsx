@@ -4,8 +4,7 @@
 import { useState, useEffect } from 'react'
 import { useSettings } from '@/context/SettingsContext'
 import { query } from '@/lib/database'
-import { Plus, Edit, Trash2, X, Save, AlertCircle, FileText } from 'lucide-react'
-
+import { Plus, Edit, Trash2, X, Save, AlertCircle } from 'lucide-react'
 interface Page {
   id: string
   slug: string
