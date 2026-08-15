@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react'
 import { useSettings } from '@/context/SettingsContext'
 import { query } from '@/lib/database'
-import { Plus, Edit, Trash2, X, ExternalLink, Save, AlertCircle, Link as LinkIcon } from 'lucide-react'
+import { Plus, Edit, Trash2, X, Save, AlertCircle, Link as LinkIcon } from 'lucide-react'
 
 interface Link {
   id: string
@@ -21,11 +21,11 @@ interface Link {
   created_at: string
 }
 
-const PLACEMENTS = [
-  { id: 'homepage', name: 'الصفحة الرئيسية', nameEn: 'Homepage' },
-  { id: 'results', name: 'صفحة النتائج', nameEn: 'Results Page' },
-  { id: 'footer', name: 'الفوتر', nameEn: 'Footer' },
-]
+// const PLACEMENTS = [
+//   { id: 'homepage', name: 'الصفحة الرئيسية', nameEn: 'Homepage' },
+//   { id: 'results', name: 'صفحة النتائج', nameEn: 'Results Page' },
+//   { id: 'footer', name: 'الفوتر', nameEn: 'Footer' },
+// ]
 
 export function LinksPage() {
   const { language } = useSettings()
@@ -35,7 +35,7 @@ export function LinksPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [selectedPlacements, setSelectedPlacements] = useState<string[]>([])
+  // const [selectedPlacements, setSelectedPlacements] = useState<string[]>([])
 
   const [formData, setFormData] = useState({
     title: '',
@@ -132,7 +132,7 @@ export function LinksPage() {
       is_active: true,
       open_in_new_tab: true,
     })
-    setSelectedPlacements([])
+    // setSelectedPlacements([])
   }
 
   const openEditModal = (link: Link) => {
