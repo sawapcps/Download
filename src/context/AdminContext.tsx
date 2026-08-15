@@ -1,5 +1,6 @@
-// src/context/AdminContext.tsx
 /// <reference types="vite/client" />
+
+// src/context/AdminContext.tsx
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react'
 import { 
@@ -34,8 +35,8 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   // استخدام ref لمنع التكرار
   const isChecking = useRef(false)
   const lastCheckTime = useRef(0)
-  const checkInterval = useRef<NodeJS.Timeout | null>(null)
-  const inactivityTimer = useRef<NodeJS.Timeout | null>(null)
+  const checkInterval = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const verifyPassword = async (password: string, storedHash: string): Promise<boolean> => {
     const encoder = new TextEncoder()
