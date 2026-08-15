@@ -1,4 +1,5 @@
 // src/lib/database.ts
+/// <reference types="vite/client" />
 
 // ============================================
 // اعدادات الاتصال بالخادم
@@ -6,7 +7,6 @@
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const API_KEY = import.meta.env.VITE_API_KEY || 'mt_live_8TIEkEtdPRREAPGZEDuDHvmeMvLQ5poA3PPEQxEK';
-
 // ============================================
 // دالة مساعدة للاستعلامات
 // ============================================

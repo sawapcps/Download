@@ -1,8 +1,6 @@
 // src/context/SettingsContext.tsx
-// تم التعديل للعمل مع قاعدة البيانات عبر الـ API
-
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { queryOne, getSiteSettings, updateSiteSettings } from '@/lib/database'
+import { getSiteSettings, updateSiteSettings } from '@/lib/database'
 import type { SiteSettings } from '@/types'
 
 interface SettingsContextType {
@@ -26,9 +24,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [darkMode, setDarkMode] = useState(true)
   const [language, setLanguage] = useState<'ar' | 'en'>('ar')
 
-  // ============================================
-  // 🔄 تحديث الإعدادات من قاعدة البيانات
-  // ============================================
   const refreshSettings = async () => {
     try {
       console.log('📡 Loading site settings...')
@@ -41,7 +36,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         setDarkMode(data.dark_mode_default ?? true)
       } else {
         console.log('⚠️ No settings found, using defaults')
-        // استخدام إعدادات افتراضية إذا لم توجد
         const defaultSettings: SiteSettings = {
           id: 'default',
           site_name: 'App X Download',
@@ -73,9 +67,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // ============================================
-  // 💾 تحديث الإعدادات
-  // ============================================
   const updateSettings = async (data: Partial<SiteSettings>): Promise<boolean> => {
     try {
       console.log('📡 Updating settings:', data)
@@ -83,7 +74,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       
       if (result) {
         console.log('✅ Settings updated successfully')
-        await refreshSettings() // إعادة تحميل الإعدادات
+        await refreshSettings()
         return true
       }
       return false
@@ -93,16 +84,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // ============================================
-  // 🔄 تحميل الإعدادات عند بدء التطبيق
-  // ============================================
   useEffect(() => {
     refreshSettings()
   }, [])
 
-  // ============================================
-  // 🌙 تطبيق الوضع الليلي
-  // ============================================
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark')
@@ -111,17 +96,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }, [darkMode])
 
-  // ============================================
-  // 🌐 تطبيق اللغة والاتجاه
-  // ============================================
   useEffect(() => {
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr'
     document.documentElement.lang = language
   }, [language])
 
-  // ============================================
-  // 🔄 دوال التبديل
-  // ============================================
   const toggleDarkMode = () => {
     setDarkMode(prev => !prev)
   }
@@ -130,16 +109,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setLanguage(prev => prev === 'ar' ? 'en' : 'ar')
   }
 
-  // ============================================
-  // 🌍 دالة الترجمة
-  // ============================================
   const t = (_key: string, arText: string, enText?: string): string => {
     return language === 'ar' ? arText : (enText || arText)
   }
 
-  // ============================================
-  // 📤 تصدير السياق
-  // ============================================
   return (
     <SettingsContext.Provider value={{
       settings,
@@ -158,9 +131,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   )
 }
 
-// ============================================
-// 🎣 Hook مخصص للاستخدام
-// ============================================
 export function useSettings() {
   const context = useContext(SettingsContext)
   if (context === undefined) {

@@ -1,4 +1,6 @@
 // src/context/AdminContext.tsx
+/// <reference types="vite/client" />
+
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react'
 import { 
   getAdminByEmail, 
