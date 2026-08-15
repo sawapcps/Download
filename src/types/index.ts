@@ -1,4 +1,4 @@
-// src/types/index.ts - تعريفات الأنواع فقط (بدون كود Hono)
+// src/types/index.ts - تعريفات الأنواع فقط
 
 export interface SiteSettings {
   id: string
