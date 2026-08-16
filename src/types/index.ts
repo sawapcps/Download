@@ -1,4 +1,4 @@
-// src/types/index.ts - تعريفات الأنواع فقط
+// src/types/index.ts - تعريفات الأنواع مع إضافة format في AudioFormat
 
 export interface SiteSettings {
   id: string
@@ -167,6 +167,7 @@ export interface VideoFormat {
 export interface AudioFormat {
   quality: string
   bitrate: string
+  format: string  // ✅ تمت إضافة الخاصية format
   size: string
   url: string
 }

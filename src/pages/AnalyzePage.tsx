@@ -1,5 +1,5 @@
 // src/pages/AnalyzePage.tsx
-// النسخة الكاملة المحدثة - تدعم تشغيل الفيديو/الصوت في نفس الصفحة
+// النسخة المعدلة - مع التحقق من وجود البيانات
 
 import { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 // ============================================
-// 🎨 أيقونات المنصات
+// 🎨 أيقونات المنصات (نفسها)
 // ============================================
 const PlatformIcons: Record<string, React.FC<{ className?: string; color?: string }>> = {
   youtube: ({ className }) => (
@@ -96,8 +96,6 @@ export function AnalyzePage() {
   const [mediaInfo, setMediaInfo] = useState<MediaInfo | null>(null);
   const [selectedType, setSelectedType] = useState<'video' | 'audio' | null>(null);
   const [downloadingQuality, setDownloadingQuality] = useState<string | null>(null);
-
-  // 🔥 حالات المشغل
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'video' | 'audio' | null>(null);
 
@@ -118,14 +116,68 @@ export function AnalyzePage() {
 
     try {
       const response = await fetch(
-        `http://localhost:3000/api/analyze?url=${encodeURIComponent(url)}`,
+        `/api/analyze?url=${encodeURIComponent(url)}`,
         { method: 'GET', headers: { 'Content-Type': 'application/json' } }
       );
 
       if (!response.ok) throw new Error('Failed to analyze URL');
 
       const data = await response.json();
-      setMediaInfo(data);
+      
+      // ✅ التأكد من وجود data.formats
+      if (data && data.formats) {
+        // تحويل البيانات إلى الشكل المطلوب
+        const videoFormats = data.formats
+          .filter((f: any) => f.type === 'video' || f.quality !== 'audio')
+          .map((f: any) => ({
+            quality: f.quality,
+            resolution: f.resolution || f.quality,
+            format: f.format?.toUpperCase() || 'MP4',
+            size: f.size || 'Auto',
+            url: f.url || '',
+          }));
+
+        const audioFormats = data.formats
+          .filter((f: any) => f.type === 'audio' || f.quality === 'audio')
+          .map((f: any) => ({
+            quality: 'MP3',
+            bitrate: String(f.bitrate || '320'),
+            format: 'MP3',
+            size: f.size || 'Auto',
+            url: f.url || '',
+          }));
+
+        setMediaInfo({
+          platform: data.platform || 'unknown',
+          title: data.title || 'Video',
+          thumbnail: data.thumbnail || '',
+          duration: data.duration || '0:00',
+          author: data.author || 'Unknown',
+          videoFormats: videoFormats.length > 0 ? videoFormats : [
+            { quality: '720p', resolution: '1280x720', format: 'MP4', size: 'Auto', url: '' },
+            { quality: '480p', resolution: '854x480', format: 'MP4', size: 'Auto', url: '' },
+          ],
+          audioFormats: audioFormats.length > 0 ? audioFormats : [
+            { quality: 'MP3', bitrate: '320', format: 'MP3', size: 'Auto', url: '' },
+          ],
+        });
+      } else {
+        // ✅ بيانات افتراضية إذا لم تكن موجودة
+        setMediaInfo({
+          platform: data?.platform || 'unknown',
+          title: data?.title || 'Video',
+          thumbnail: data?.thumbnail || '',
+          duration: data?.duration || '0:00',
+          author: data?.author || 'Unknown',
+          videoFormats: [
+            { quality: '720p', resolution: '1280x720', format: 'MP4', size: 'Auto', url: '' },
+            { quality: '480p', resolution: '854x480', format: 'MP4', size: 'Auto', url: '' },
+          ],
+          audioFormats: [
+            { quality: 'MP3', bitrate: '320', format: 'MP3', size: 'Auto', url: '' },
+          ],
+        });
+      }
     } catch (err) {
       setError(language === 'ar' ? 'حدث خطأ أثناء تحليل الرابط' : 'Error analyzing link');
       console.error(err);
@@ -135,7 +187,7 @@ export function AnalyzePage() {
   };
 
   // ============================================
-  // ✅ دالة التحميل المحدثة - مع دعم أفضل لتيك توك
+  // ✅ دالة التحميل
   // ============================================
   const handleDownload = async (format: VideoFormat | AudioFormat) => {
     setDownloadingQuality(format.quality);
@@ -148,12 +200,11 @@ export function AnalyzePage() {
         ? '320'
         : format.quality.replace('p', '').replace('HD', '').trim() || '720';
 
-      // ⏱️ إضافة timeout للطلب
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
       const response = await fetch(
-        `http://localhost:3000/api/download?url=${encodeURIComponent(url)}&format=${isAudio ? 'audio' : 'video'}&quality=${qualityValue}`,
+        `/api/download?url=${encodeURIComponent(url)}&format=${isAudio ? 'audio' : 'video'}&quality=${qualityValue}`,
         { 
           method: 'GET',
           signal: controller.signal,
@@ -174,11 +225,9 @@ export function AnalyzePage() {
       }
 
       if (data.downloadUrl) {
-        // 🔥 التحقق من نوع الرابط (فيديو أم صوت)
         const urlLower = data.downloadUrl.toLowerCase();
         let detectedType: 'video' | 'audio' = isAudio ? 'audio' : 'video';
         
-        // إذا كان الرابط يشير إلى ملف صوتي
         if (urlLower.includes('audio') || urlLower.includes('m4a') || urlLower.includes('mp3')) {
           detectedType = 'audio';
         } else if (urlLower.includes('video') || urlLower.includes('mp4') || urlLower.includes('webm')) {
@@ -187,13 +236,10 @@ export function AnalyzePage() {
 
         console.log(`✅ Media URL loaded (${detectedType}):`, data.downloadUrl);
         
-        // 🎯 عرض المشغل مع النوع الصحيح
         setMediaUrl(data.downloadUrl);
         setMediaType(detectedType);
         
-        // إذا كان الفيديو ولا يوجد مشغل، حاول التحميل مباشرة
         if (detectedType === 'video') {
-          // محاولة فتح الرابط مباشرة كحل بديل
           setTimeout(() => {
             const link = document.createElement('a');
             link.href = data.downloadUrl;
@@ -354,7 +400,7 @@ export function AnalyzePage() {
           </div>
         </div>
 
-        {/* 🎯 مشغل الفيديو/الصوت - محسّن لتيك توك */}
+        {/* 🎯 مشغل الفيديو/الصوت */}
         {mediaUrl && mediaType && (
           <div className="card p-4 mb-6 bg-gray-900/5 dark:bg-white/5 border border-primary-200 dark:border-primary-800">
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -376,7 +422,6 @@ export function AnalyzePage() {
                 controlsList="nodownload"
                 onError={(e) => {
                   console.error('❌ Video playback error:', e);
-                  // إذا فشل تشغيل الفيديو، حاول فتح الرابط مباشرة
                   const link = document.createElement('a');
                   link.href = mediaUrl;
                   link.download = `video_${Date.now()}.mp4`;
@@ -494,7 +539,7 @@ export function AnalyzePage() {
           </div>
         </div>
 
-        {/* خيارات الجودة */}
+        {/* خيارات الجودة - ✅ مع التحقق من وجود البيانات */}
         {selectedType && mediaInfo && (
           <div className="card p-6 animate-fade-in">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
@@ -504,64 +549,107 @@ export function AnalyzePage() {
             </h2>
 
             <div className="space-y-3">
-              {(selectedType === 'video'
-                ? mediaInfo.videoFormats
-                : mediaInfo.audioFormats
-              ).map((format) => (
-                <div
-                  key={format.quality}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    {selectedType === 'video' ? (
-                      <div className="w-12 h-12 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-                        <Play className="w-6 h-6 text-primary-500" />
+              {selectedType === 'video' ? (
+                // ✅ التحقق من وجود videoFormats قبل استخدام map
+                mediaInfo.videoFormats && mediaInfo.videoFormats.length > 0 ? (
+                  mediaInfo.videoFormats.map((format) => (
+                    <div
+                      key={format.quality}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
+                          <Play className="w-6 h-6 text-primary-500" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-gray-900 dark:text-white text-lg">
+                            {format.quality}
+                          </div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            {'resolution' in format && (
+                              <span>
+                                {(format as VideoFormat).resolution} | {format.size}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    ) : (
-                      <div className="w-12 h-12 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                        <Music className="w-6 h-6 text-green-500" />
-                      </div>
-                    )}
-                    <div>
-                      <div className="font-semibold text-gray-900 dark:text-white text-lg">
-                        {format.quality}
-                      </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {selectedType === 'video' && 'resolution' in format && (
-                          <span>
-                            {(format as VideoFormat).resolution} | {format.size}
-                          </span>
+                      <button
+                        onClick={() => handleDownload(format)}
+                        disabled={!!downloadingQuality}
+                        className="btn-primary flex items-center gap-2 justify-center min-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {downloadingQuality === format.quality ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            {language === 'ar' ? 'جاري...' : 'Loading...'}
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-5 h-5" />
+                            {t('download', 'Download')}
+                          </>
                         )}
-                        {selectedType === 'audio' && 'bitrate' in format && (
-                          <span>
-                            {(format as AudioFormat).bitrate} kbps | {format.size}
-                          </span>
-                        )}
-                      </div>
+                      </button>
                     </div>
-                  </div>
-                  <button
-                    onClick={() => handleDownload(format)}
-                    disabled={!!downloadingQuality}
-                    className="btn-primary flex items-center gap-2 justify-center min-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {downloadingQuality === format.quality ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        {language === 'ar' ? 'جاري...' : 'Loading...'}
-                      </>
-                    ) : (
-                      <>
-                        <Download className="w-5 h-5" />
-                        {t('download', 'Download')}
-                      </>
-                    )}
-                  </button>
-                </div>
-              ))}
+                  ))
+                ) : (
+                  <p className="text-center text-gray-500 dark:text-gray-400 py-4">
+                    {language === 'ar' ? 'لا توجد جودات فيديو متاحة' : 'No video formats available'}
+                  </p>
+                )
+              ) : (
+                // ✅ التحقق من وجود audioFormats قبل استخدام map
+                mediaInfo.audioFormats && mediaInfo.audioFormats.length > 0 ? (
+                  mediaInfo.audioFormats.map((format) => (
+                    <div
+                      key={format.quality}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                          <Music className="w-6 h-6 text-green-500" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-gray-900 dark:text-white text-lg">
+                            {format.quality}
+                          </div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            {'bitrate' in format && (
+                              <span>
+                                {(format as AudioFormat).bitrate} kbps | {format.size}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDownload(format)}
+                        disabled={!!downloadingQuality}
+                        className="btn-primary flex items-center gap-2 justify-center min-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {downloadingQuality === format.quality ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            {language === 'ar' ? 'جاري...' : 'Loading...'}
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-5 h-5" />
+                            {t('download', 'Download')}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-center text-gray-500 dark:text-gray-400 py-4">
+                    {language === 'ar' ? 'لا توجد جودات صوت متاحة' : 'No audio formats available'}
+                  </p>
+                )
+              )}
             </div>
 
-            {/* معلومات التحميل */}
             <div className="mt-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-sm text-blue-700 dark:text-blue-300">
               <p className="flex items-center gap-2">
                 <span className="text-lg">🔒</span>
