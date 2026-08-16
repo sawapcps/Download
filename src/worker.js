@@ -1,6 +1,6 @@
 // src/worker.js
 // ============================================
-// 🚀 Worker مع دعم كامل لـ API
+// 🚀 Worker الكامل مع دعم API و SPA
 // ============================================
 
 const CORS_HEADERS = {
@@ -161,6 +161,14 @@ function videoPage(videoUrl, videoId, title) {
         .steps { text-align: right; margin: 15px 0; padding-right: 20px; }
         .steps li { margin: 8px 0; color: #444; }
         .footer { text-align: center; margin-top: 20px; color: #999; font-size: 14px; }
+        .note {
+            background: #fff3cd;
+            padding: 12px;
+            border-radius: 8px;
+            color: #856404;
+            margin-top: 15px;
+            font-size: 14px;
+        }
         @media (max-width: 600px) {
             .container { padding: 15px; }
             h1 { font-size: 18px; }
@@ -191,6 +199,9 @@ function videoPage(videoUrl, videoId, title) {
             <p style="margin-top:10px;color:#888;font-size:14px;">
                 ⚠️ ملاحظة: هذه الطريقة تعمل على متصفحات سطح المكتب
             </p>
+            <div class="note">
+                💡 إذا لم يعمل التحميل، استخدم زر "فتح في يوتيوب" أعلاه
+            </div>
             <a href="${videoUrl}" target="_blank" class="btn">📺 فتح في يوتيوب</a>
         </div>
         
@@ -211,7 +222,7 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
     
-    // ===== OPTIONS =====
+    // ===== OPTIONS (CORS) =====
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
@@ -227,7 +238,7 @@ export default {
       });
     }
     
-    // ===== /api/query ===== (يعيد مصفوفة فارغة بدلاً من خطأ)
+    // ===== /api/query =====
     if (path === '/api/query' && request.method === 'POST') {
       return jsonResponse([]);
     }
@@ -334,7 +345,7 @@ export default {
       });
     }
     
-    // ===== SPA =====
+    // ===== SPA: تقديم تطبيق React =====
     try {
       const asset = await env.ASSETS.fetch(request);
       if (asset.status !== 404) {
