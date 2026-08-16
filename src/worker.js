@@ -1,6 +1,6 @@
 // src/worker.js
 // ============================================
-// 🚀 Worker مع خدمات تحميل بديلة
+// 🚀 Worker مع دعم السيرفر الخارجي على Render
 // ============================================
 
 const CORS_HEADERS = {
@@ -39,84 +39,33 @@ function getYoutubeId(videoUrl) {
 }
 
 // ============================================
-// 📥 الحصول على رابط التحميل (طريقة جديدة)
+// 📥 الحصول على رابط التحميل من السيرفر الخارجي
 // ============================================
+const BACKEND_URL = 'https://youtube-downloader-opwf.onrender.com';
+
 async function getDirectDownloadUrl(videoUrl, quality) {
-  const videoId = getYoutubeId(videoUrl);
-  if (!videoId) throw new Error('Invalid YouTube URL');
-  
-  // 🎯 الخدمة 1: Convert2MP3 (يدعم الفيديو)
   try {
-    const response = await fetch(`https://api.convert2mp3s.com/api/convert`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-      body: JSON.stringify({
-        url: `https://www.youtube.com/watch?v=${videoId}`,
-        format: 'mp4',
-        quality: quality || '720',
-      }),
-    });
+    const response = await fetch(
+      `${BACKEND_URL}/api/download?url=${encodeURIComponent(videoUrl)}&quality=${quality}`
+    );
     
     const data = await response.json();
+    
     if (data && data.downloadUrl) {
       return {
         url: data.downloadUrl,
-        filename: `${videoId}.mp4`,
+        filename: data.filename || `video_${Date.now()}.mp4`,
+        title: data.title || 'فيديو يوتيوب',
+        author: data.author || 'يوتيوب',
+        duration: data.duration || 0,
       };
     }
-  } catch (e) {
-    console.log('Convert2MP3 failed:', e.message);
-  }
-  
-  // 🎯 الخدمة 2: YouTube MP3 Downloader (يدعم الفيديو أيضاً)
-  try {
-    const response = await fetch(`https://youtube-mp3-downloader2.vercel.app/api/download`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        videoId: videoId,
-        quality: quality || '720',
-      }),
-    });
     
-    const data = await response.json();
-    if (data && data.url) {
-      return {
-        url: data.url,
-        filename: `${videoId}.mp4`,
-      };
-    }
-  } catch (e) {
-    console.log('YouTube MP3 failed:', e.message);
+    throw new Error(data.error || 'فشل الحصول على رابط التحميل');
+  } catch (error) {
+    console.error('Backend error:', error);
+    throw new Error('فشل الاتصال بخادم التحميل');
   }
-  
-  // 🎯 الخدمة 3: 9convert (بديل)
-  try {
-    const response = await fetch(`https://9convert.com/api/convert`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: `url=https://www.youtube.com/watch?v=${videoId}&format=mp4&quality=${quality}`,
-    });
-    
-    const data = await response.json();
-    if (data && data.downloadUrl) {
-      return {
-        url: data.downloadUrl,
-        filename: `${videoId}.mp4`,
-      };
-    }
-  } catch (e) {
-    console.log('9convert failed:', e.message);
-  }
-  
-  throw new Error('جميع خدمات التحميل فشلت');
 }
 
 // ============================================
@@ -140,6 +89,7 @@ export default {
       return jsonResponse({
         status: 'healthy',
         time: new Date().toISOString(),
+        backend: BACKEND_URL,
       });
     }
     
@@ -168,8 +118,38 @@ export default {
         }, 400);
       }
       
-      const videoId = getYoutubeId(videoUrl);
+      // جلب المعلومات من السيرفر الخارجي
+      try {
+        const response = await fetch(
+          `${BACKEND_URL}/api/analyze?url=${encodeURIComponent(videoUrl)}`
+        );
+        const data = await response.json();
+        
+        if (data && data.success) {
+          return jsonResponse({
+            success: true,
+            platform: 'youtube',
+            videoId: getYoutubeId(videoUrl),
+            url: videoUrl,
+            title: data.title || 'فيديو يوتيوب',
+            author: data.author || 'يوتيوب',
+            thumbnail: data.thumbnail || `https://img.youtube.com/vi/${getYoutubeId(videoUrl)}/hqdefault.jpg`,
+            duration: data.duration || '0:00',
+            formats: [
+              { quality: '1080', resolution: '1920x1080', format: 'MP4', type: 'video' },
+              { quality: '720', resolution: '1280x720', format: 'MP4', type: 'video' },
+              { quality: '480', resolution: '854x480', format: 'MP4', type: 'video' },
+              { quality: '360', resolution: '640x360', format: 'MP4', type: 'video' },
+              { quality: 'audio', bitrate: '320', format: 'MP3', type: 'audio' },
+            ],
+          });
+        }
+      } catch (error) {
+        console.error('Backend analyze error:', error);
+      }
       
+      // رد احتياطي في حال فشل السيرفر الخارجي
+      const videoId = getYoutubeId(videoUrl);
       return jsonResponse({
         success: true,
         platform: 'youtube',
@@ -209,6 +189,9 @@ export default {
           success: true,
           downloadUrl: result.url,
           filename: result.filename,
+          title: result.title,
+          author: result.author,
+          duration: result.duration,
           format: format,
           quality: quality,
         });

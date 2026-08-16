@@ -9,10 +9,10 @@ binding = "ASSETS"
 not_found_handling = "single-page-application"
 run_worker_first = ["/api/*"]
 
+[vars]
+API_KEY = "mt_live_8TIEkEtdPRREAPGZEDuDHvmeMvLQ5poA3PPEQxEK"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "madartech_platform"
 database_id = "1e57a5a3-8705-4b28-ad17-7b7a1e5c7fa6"
-
-[vars]
-API_KEY = "mt_live_8TIEkEtdPRREAPGZEDuDHvmeMvLQ5poA3PPEQxEK"
