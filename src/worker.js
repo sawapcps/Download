@@ -1,6 +1,6 @@
 // src/worker.js
 // ============================================
-// 🚀 Worker مع دعم السيرفر الخارجي على Render
+// 🚀 Worker النهائي مع دعم Sitemap.xml
 // ============================================
 
 const CORS_HEADERS = {
@@ -69,6 +69,22 @@ async function getDirectDownloadUrl(videoUrl, quality) {
 }
 
 // ============================================
+// 📊 جلب معلومات الفيديو من السيرفر الخارجي
+// ============================================
+async function analyzeVideo(videoUrl) {
+  try {
+    const response = await fetch(
+      `${BACKEND_URL}/api/analyze?url=${encodeURIComponent(videoUrl)}`
+    );
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Backend analyze error:', error);
+    return null;
+  }
+}
+
+// ============================================
 // 🚀 Cloudflare Worker الرئيسي
 // ============================================
 export default {
@@ -98,6 +114,31 @@ export default {
       return jsonResponse([]);
     }
     
+    // ===== /sitemap.xml =====
+    if (path === '/sitemap.xml') {
+      const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://download.madartech.uk/</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://download.madartech.uk/analyze</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <priority>0.8</priority>
+  </url>
+</urlset>`;
+      
+      return new Response(sitemap, {
+        headers: {
+          'Content-Type': 'application/xml; charset=utf-8',
+          'Cache-Control': 'public, max-age=3600',
+          ...CORS_HEADERS,
+        },
+      });
+    }
+    
     // ===== /api/analyze =====
     if (path === '/api/analyze' && request.method === 'GET') {
       const videoUrl = url.searchParams.get('url');
@@ -119,33 +160,26 @@ export default {
       }
       
       // جلب المعلومات من السيرفر الخارجي
-      try {
-        const response = await fetch(
-          `${BACKEND_URL}/api/analyze?url=${encodeURIComponent(videoUrl)}`
-        );
-        const data = await response.json();
-        
-        if (data && data.success) {
-          return jsonResponse({
-            success: true,
-            platform: 'youtube',
-            videoId: getYoutubeId(videoUrl),
-            url: videoUrl,
-            title: data.title || 'فيديو يوتيوب',
-            author: data.author || 'يوتيوب',
-            thumbnail: data.thumbnail || `https://img.youtube.com/vi/${getYoutubeId(videoUrl)}/hqdefault.jpg`,
-            duration: data.duration || '0:00',
-            formats: [
-              { quality: '1080', resolution: '1920x1080', format: 'MP4', type: 'video' },
-              { quality: '720', resolution: '1280x720', format: 'MP4', type: 'video' },
-              { quality: '480', resolution: '854x480', format: 'MP4', type: 'video' },
-              { quality: '360', resolution: '640x360', format: 'MP4', type: 'video' },
-              { quality: 'audio', bitrate: '320', format: 'MP3', type: 'audio' },
-            ],
-          });
-        }
-      } catch (error) {
-        console.error('Backend analyze error:', error);
+      const data = await analyzeVideo(videoUrl);
+      
+      if (data && data.success) {
+        return jsonResponse({
+          success: true,
+          platform: 'youtube',
+          videoId: getYoutubeId(videoUrl),
+          url: videoUrl,
+          title: data.title || 'فيديو يوتيوب',
+          author: data.author || 'يوتيوب',
+          thumbnail: data.thumbnail || `https://img.youtube.com/vi/${getYoutubeId(videoUrl)}/hqdefault.jpg`,
+          duration: data.duration || '0:00',
+          formats: [
+            { quality: '1080', resolution: '1920x1080', format: 'MP4', type: 'video' },
+            { quality: '720', resolution: '1280x720', format: 'MP4', type: 'video' },
+            { quality: '480', resolution: '854x480', format: 'MP4', type: 'video' },
+            { quality: '360', resolution: '640x360', format: 'MP4', type: 'video' },
+            { quality: 'audio', bitrate: '320', format: 'MP3', type: 'audio' },
+          ],
+        });
       }
       
       // رد احتياطي في حال فشل السيرفر الخارجي
