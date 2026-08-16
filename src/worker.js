@@ -1,6 +1,6 @@
 // src/worker.js
 // ============================================
-// 🚀 Worker مع دعم التحميل عبر خدمة خارجية
+// 🚀 Worker مع عدة خدمات تحميل بديلة
 // ============================================
 
 const CORS_HEADERS = {
@@ -39,34 +39,121 @@ function getYoutubeId(videoUrl) {
 }
 
 // ============================================
-// 📥 الحصول على رابط التحميل (بدون ytdl-core)
+// 📥 الحصول على رابط التحميل (عدة خدمات)
 // ============================================
 async function getDirectDownloadUrl(videoUrl, quality) {
   const videoId = getYoutubeId(videoUrl);
   if (!videoId) throw new Error('Invalid YouTube URL');
   
-  // استخدام خدمة مجانية
-  const apiUrl = `https://api.savetube.me/api/v1/download?url=https://www.youtube.com/watch?v=${videoId}&quality=${quality}`;
-  
-  try {
-    const response = await fetch(apiUrl);
-    const data = await response.json();
+  // قائمة الخدمات المجانية
+  const services = [
+    // الخدمة 1: y2mate
+    async () => {
+      const formData = new URLSearchParams();
+      formData.append('url', `https://www.youtube.com/watch?v=${videoId}`);
+      formData.append('q', 'mp4');
+      
+      const response = await fetch('https://www.y2mate.com/mates/en68/analyzeV2/ajax', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData.toString(),
+      });
+      
+      const data = await response.json();
+      if (data && data.links) {
+        const links = JSON.parse(data.links);
+        const qualityMap = {
+          '1080': '1080',
+          '720': '720',
+          '480': '480',
+          '360': '360'
+        };
+        const q = qualityMap[quality] || '720';
+        const videoLink = links.mp4?.[q]?.d;
+        if (videoLink) {
+          return {
+            url: videoLink.startsWith('http') ? videoLink : `https:${videoLink}`,
+            filename: `${videoId}.mp4`,
+            title: 'فيديو يوتيوب',
+            author: 'يوتيوب',
+            thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+            duration: '0:00',
+          };
+        }
+      }
+      throw new Error('No video link found');
+    },
     
-    if (data && data.downloadUrl) {
-      return {
-        url: data.downloadUrl,
-        filename: `video_${videoId}.mp4`,
-        title: 'فيديو يوتيوب',
-        author: 'يوتيوب',
-        thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-        duration: '0:00',
-      };
+    // الخدمة 2: savefrom.net
+    async () => {
+      const response = await fetch(`https://savefrom.net/api/convert`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `url=https://www.youtube.com/watch?v=${videoId}&format=mp4`,
+      });
+      
+      const data = await response.json();
+      if (data && data.downloadUrl) {
+        return {
+          url: data.downloadUrl,
+          filename: `${videoId}.mp4`,
+          title: 'فيديو يوتيوب',
+          author: 'يوتيوب',
+          thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+          duration: '0:00',
+        };
+      }
+      throw new Error('No download URL');
+    },
+    
+    // الخدمة 3: api.savetube (محاولة أخرى)
+    async () => {
+      const response = await fetch(`https://api.savetube.me/api/v1/download`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          quality: quality || '720',
+          format: 'mp4',
+        }),
+      });
+      
+      const data = await response.json();
+      if (data && data.downloadUrl) {
+        return {
+          url: data.downloadUrl,
+          filename: data.filename || `${videoId}.mp4`,
+          title: 'فيديو يوتيوب',
+          author: 'يوتيوب',
+          thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+          duration: '0:00',
+        };
+      }
+      throw new Error('No download URL');
+    },
+  ];
+  
+  // جرب كل خدمة
+  let lastError = null;
+  for (const service of services) {
+    try {
+      const result = await service();
+      if (result && result.url) {
+        return result;
+      }
+    } catch (error) {
+      console.warn('Service failed:', error.message);
+      lastError = error;
     }
-    throw new Error('No download URL returned');
-  } catch (error) {
-    console.error('Download error:', error);
-    throw new Error('فشل تحميل الفيديو');
   }
+  
+  throw new Error(lastError?.message || 'فشلت جميع خدمات التحميل');
 }
 
 // ============================================
