@@ -5,5 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "echo 'No build needed'"
+  },
+  "dependencies": {
+    "ytdl-core": "^4.11.5"
   }
 }
