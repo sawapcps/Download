@@ -1,5 +1,5 @@
 {
-  "name": "app-x-download",
+  "name": "download-api",
   "private": true,
   "version": "1.0.0",
   "type": "module",
