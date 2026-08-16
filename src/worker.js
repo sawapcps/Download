@@ -1,6 +1,6 @@
 // src/worker.js
 // ============================================
-// 🚀 Worker مع تحميل حقيقي
+// 🚀 Worker مع خدمات تحميل بديلة
 // ============================================
 
 const CORS_HEADERS = {
@@ -39,57 +39,24 @@ function getYoutubeId(videoUrl) {
 }
 
 // ============================================
-// 📥 الحصول على رابط التحميل المباشر
+// 📥 الحصول على رابط التحميل (طريقة جديدة)
 // ============================================
 async function getDirectDownloadUrl(videoUrl, quality) {
   const videoId = getYoutubeId(videoUrl);
   if (!videoId) throw new Error('Invalid YouTube URL');
   
-  // 🔥 استخدام خدمات متعددة للحصول على رابط حقيقي
-  
-  // الخدمة 1: y2mate
+  // 🎯 الخدمة 1: Convert2MP3 (يدعم الفيديو)
   try {
-    const formData = new URLSearchParams();
-    formData.append('url', `https://www.youtube.com/watch?v=${videoId}`);
-    formData.append('q', 'mp4');
-    
-    const response = await fetch('https://www.y2mate.com/mates/en68/analyzeV2/ajax', {
+    const response = await fetch(`https://api.convert2mp3s.com/api/convert`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://www.y2mate.com/',
-        'Origin': 'https://www.y2mate.com',
       },
-      body: formData.toString(),
-    });
-    
-    const data = await response.json();
-    if (data && data.links) {
-      const links = JSON.parse(data.links);
-      const qualityMap = { '1080': '1080', '720': '720', '480': '480', '360': '360' };
-      const q = qualityMap[quality] || '720';
-      
-      if (links.mp4 && links.mp4[q] && links.mp4[q].d) {
-        return {
-          url: links.mp4[q].d.startsWith('http') ? links.mp4[q].d : `https:${links.mp4[q].d}`,
-          filename: `${videoId}.mp4`,
-        };
-      }
-    }
-  } catch (e) {
-    console.log('y2mate failed:', e.message);
-  }
-  
-  // الخدمة 2: savetube
-  try {
-    const response = await fetch(`https://api.savetube.me/api/v1/download`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         url: `https://www.youtube.com/watch?v=${videoId}`,
-        quality: quality || '720',
         format: 'mp4',
+        quality: quality || '720',
       }),
     });
     
@@ -101,10 +68,55 @@ async function getDirectDownloadUrl(videoUrl, quality) {
       };
     }
   } catch (e) {
-    console.log('savetube failed:', e.message);
+    console.log('Convert2MP3 failed:', e.message);
   }
   
-  throw new Error('فشل الحصول على رابط التحميل');
+  // 🎯 الخدمة 2: YouTube MP3 Downloader (يدعم الفيديو أيضاً)
+  try {
+    const response = await fetch(`https://youtube-mp3-downloader2.vercel.app/api/download`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        videoId: videoId,
+        quality: quality || '720',
+      }),
+    });
+    
+    const data = await response.json();
+    if (data && data.url) {
+      return {
+        url: data.url,
+        filename: `${videoId}.mp4`,
+      };
+    }
+  } catch (e) {
+    console.log('YouTube MP3 failed:', e.message);
+  }
+  
+  // 🎯 الخدمة 3: 9convert (بديل)
+  try {
+    const response = await fetch(`https://9convert.com/api/convert`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: `url=https://www.youtube.com/watch?v=${videoId}&format=mp4&quality=${quality}`,
+    });
+    
+    const data = await response.json();
+    if (data && data.downloadUrl) {
+      return {
+        url: data.downloadUrl,
+        filename: `${videoId}.mp4`,
+      };
+    }
+  } catch (e) {
+    console.log('9convert failed:', e.message);
+  }
+  
+  throw new Error('جميع خدمات التحميل فشلت');
 }
 
 // ============================================
@@ -193,7 +205,6 @@ export default {
       try {
         const result = await getDirectDownloadUrl(videoUrl, quality);
         
-        // ✅ نعيد رابط التحميل المباشر الحقيقي
         return jsonResponse({
           success: true,
           downloadUrl: result.url,
