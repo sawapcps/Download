@@ -1,6 +1,6 @@
 // src/worker.js
 // ============================================
-// 🚀 Worker مع خدمات تحميل متعددة
+// 🚀 Worker مع تحميل حقيقي
 // ============================================
 
 const CORS_HEADERS = {
@@ -39,94 +39,72 @@ function getYoutubeId(videoUrl) {
 }
 
 // ============================================
-// 📥 الحصول على رابط التحميل (خدمات متعددة)
+// 📥 الحصول على رابط التحميل المباشر
 // ============================================
 async function getDirectDownloadUrl(videoUrl, quality) {
   const videoId = getYoutubeId(videoUrl);
   if (!videoId) throw new Error('Invalid YouTube URL');
   
-  // 🔥 قائمة الخدمات
-  const services = [
-    // الخدمة 1: YouTube oEmbed (يعطي معلومات فقط)
-    async () => {
-      const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`);
-      if (response.ok) {
-        const data = await response.json();
-        return {
-          url: `https://www.youtube.com/watch?v=${videoId}`,
-          filename: `${videoId}.mp4`,
-          title: data.title || 'فيديو يوتيوب',
-          author: data.author_name || 'يوتيوب',
-          thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-          duration: '0:00',
-        };
-      }
-      throw new Error('oEmbed failed');
-    },
-    
-    // الخدمة 2: Convert2MP3 (يدعم الفيديو)
-    async () => {
-      const response = await fetch(`https://api.convert2mp3s.com/api/convert?url=https://www.youtube.com/watch?v=${videoId}&format=mp4&quality=${quality}`, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        },
-      });
-      const data = await response.json();
-      if (data && data.downloadUrl) {
-        return {
-          url: data.downloadUrl,
-          filename: `${videoId}.mp4`,
-          title: data.title || 'فيديو يوتيوب',
-          author: data.author || 'يوتيوب',
-          thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-          duration: data.duration || '0:00',
-        };
-      }
-      throw new Error('Convert2MP3 failed');
-    },
-    
-    // الخدمة 3: YouTube MP3 (يدعم الفيديو أيضاً)
-    async () => {
-      const response = await fetch(`https://youtube-mp3-downloader2.vercel.app/api/download`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          videoId: videoId,
-          quality: quality || '720',
-        }),
-      });
-      const data = await response.json();
-      if (data && data.url) {
-        return {
-          url: data.url,
-          filename: `${videoId}.mp4`,
-          title: data.title || 'فيديو يوتيوب',
-          author: data.author || 'يوتيوب',
-          thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-          duration: data.duration || '0:00',
-        };
-      }
-      throw new Error('YouTube MP3 failed');
-    },
-  ];
+  // 🔥 استخدام خدمات متعددة للحصول على رابط حقيقي
   
-  // جرب كل خدمة
-  for (const service of services) {
-    try {
-      console.log('Trying service...');
-      const result = await service();
-      if (result && result.url) {
-        console.log('Service succeeded!');
-        return result;
+  // الخدمة 1: y2mate
+  try {
+    const formData = new URLSearchParams();
+    formData.append('url', `https://www.youtube.com/watch?v=${videoId}`);
+    formData.append('q', 'mp4');
+    
+    const response = await fetch('https://www.y2mate.com/mates/en68/analyzeV2/ajax', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://www.y2mate.com/',
+        'Origin': 'https://www.y2mate.com',
+      },
+      body: formData.toString(),
+    });
+    
+    const data = await response.json();
+    if (data && data.links) {
+      const links = JSON.parse(data.links);
+      const qualityMap = { '1080': '1080', '720': '720', '480': '480', '360': '360' };
+      const q = qualityMap[quality] || '720';
+      
+      if (links.mp4 && links.mp4[q] && links.mp4[q].d) {
+        return {
+          url: links.mp4[q].d.startsWith('http') ? links.mp4[q].d : `https:${links.mp4[q].d}`,
+          filename: `${videoId}.mp4`,
+        };
       }
-    } catch (error) {
-      console.warn('Service failed:', error.message);
     }
+  } catch (e) {
+    console.log('y2mate failed:', e.message);
   }
   
-  throw new Error('جميع خدمات التحميل فشلت. حاول مرة أخرى.');
+  // الخدمة 2: savetube
+  try {
+    const response = await fetch(`https://api.savetube.me/api/v1/download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        quality: quality || '720',
+        format: 'mp4',
+      }),
+    });
+    
+    const data = await response.json();
+    if (data && data.downloadUrl) {
+      return {
+        url: data.downloadUrl,
+        filename: `${videoId}.mp4`,
+      };
+    }
+  } catch (e) {
+    console.log('savetube failed:', e.message);
+  }
+  
+  throw new Error('فشل الحصول على رابط التحميل');
 }
 
 // ============================================
@@ -190,10 +168,10 @@ export default {
         thumbnail: videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null,
         duration: '0:00',
         formats: [
-          { quality: '1080p', resolution: '1920x1080', format: 'MP4', type: 'video' },
-          { quality: '720p', resolution: '1280x720', format: 'MP4', type: 'video' },
-          { quality: '480p', resolution: '854x480', format: 'MP4', type: 'video' },
-          { quality: '360p', resolution: '640x360', format: 'MP4', type: 'video' },
+          { quality: '1080', resolution: '1920x1080', format: 'MP4', type: 'video' },
+          { quality: '720', resolution: '1280x720', format: 'MP4', type: 'video' },
+          { quality: '480', resolution: '854x480', format: 'MP4', type: 'video' },
+          { quality: '360', resolution: '640x360', format: 'MP4', type: 'video' },
           { quality: 'audio', bitrate: '320', format: 'MP3', type: 'audio' },
         ],
       });
@@ -215,14 +193,11 @@ export default {
       try {
         const result = await getDirectDownloadUrl(videoUrl, quality);
         
+        // ✅ نعيد رابط التحميل المباشر الحقيقي
         return jsonResponse({
           success: true,
           downloadUrl: result.url,
           filename: result.filename,
-          title: result.title,
-          author: result.author,
-          thumbnail: result.thumbnail,
-          duration: result.duration,
           format: format,
           quality: quality,
         });
