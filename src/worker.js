@@ -1,6 +1,6 @@
 // src/worker.js
 // ============================================
-// 🚀 Worker مع عدة خدمات تحميل بديلة
+// 🚀 Worker مع خدمة y2mate للتحميل
 // ============================================
 
 const CORS_HEADERS = {
@@ -39,121 +39,79 @@ function getYoutubeId(videoUrl) {
 }
 
 // ============================================
-// 📥 الحصول على رابط التحميل (عدة خدمات)
+// 📥 الحصول على رابط التحميل من y2mate
 // ============================================
 async function getDirectDownloadUrl(videoUrl, quality) {
   const videoId = getYoutubeId(videoUrl);
   if (!videoId) throw new Error('Invalid YouTube URL');
   
-  // قائمة الخدمات المجانية
-  const services = [
-    // الخدمة 1: y2mate
-    async () => {
-      const formData = new URLSearchParams();
-      formData.append('url', `https://www.youtube.com/watch?v=${videoId}`);
-      formData.append('q', 'mp4');
+  // استخدام y2mate
+  const formData = new URLSearchParams();
+  formData.append('url', `https://www.youtube.com/watch?v=${videoId}`);
+  formData.append('q', 'mp4');
+  
+  const response = await fetch('https://www.y2mate.com/mates/en68/analyzeV2/ajax', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Referer': 'https://www.y2mate.com/',
+      'Origin': 'https://www.y2mate.com',
+    },
+    body: formData.toString(),
+  });
+  
+  const text = await response.text();
+  
+  try {
+    const data = JSON.parse(text);
+    
+    if (data && data.links) {
+      const links = JSON.parse(data.links);
+      const qualityMap = {
+        '1080': '1080',
+        '720': '720',
+        '480': '480',
+        '360': '360'
+      };
+      const q = qualityMap[quality] || '720';
       
-      const response = await fetch('https://www.y2mate.com/mates/en68/analyzeV2/ajax', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: formData.toString(),
-      });
+      // محاولة الحصول على الفيديو بالجودة المطلوبة
+      let videoLink = null;
       
-      const data = await response.json();
-      if (data && data.links) {
-        const links = JSON.parse(data.links);
-        const qualityMap = {
-          '1080': '1080',
-          '720': '720',
-          '480': '480',
-          '360': '360'
-        };
-        const q = qualityMap[quality] || '720';
-        const videoLink = links.mp4?.[q]?.d;
-        if (videoLink) {
-          return {
-            url: videoLink.startsWith('http') ? videoLink : `https:${videoLink}`,
-            filename: `${videoId}.mp4`,
-            title: 'فيديو يوتيوب',
-            author: 'يوتيوب',
-            thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-            duration: '0:00',
-          };
+      if (links.mp4) {
+        if (links.mp4[q] && links.mp4[q].d) {
+          videoLink = links.mp4[q].d;
+        } else {
+          // جلب أي جودة متاحة
+          const keys = Object.keys(links.mp4);
+          for (const key of keys) {
+            if (links.mp4[key].d) {
+              videoLink = links.mp4[key].d;
+              break;
+            }
+          }
         }
       }
-      throw new Error('No video link found');
-    },
-    
-    // الخدمة 2: savefrom.net
-    async () => {
-      const response = await fetch(`https://savefrom.net/api/convert`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `url=https://www.youtube.com/watch?v=${videoId}&format=mp4`,
-      });
       
-      const data = await response.json();
-      if (data && data.downloadUrl) {
+      if (videoLink) {
+        const url = videoLink.startsWith('http') ? videoLink : `https:${videoLink}`;
         return {
-          url: data.downloadUrl,
+          url: url,
           filename: `${videoId}.mp4`,
-          title: 'فيديو يوتيوب',
-          author: 'يوتيوب',
+          title: data.title || 'فيديو يوتيوب',
+          author: data.author || 'يوتيوب',
           thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-          duration: '0:00',
+          duration: data.duration || '0:00',
         };
       }
-      throw new Error('No download URL');
-    },
-    
-    // الخدمة 3: api.savetube (محاولة أخرى)
-    async () => {
-      const response = await fetch(`https://api.savetube.me/api/v1/download`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: `https://www.youtube.com/watch?v=${videoId}`,
-          quality: quality || '720',
-          format: 'mp4',
-        }),
-      });
-      
-      const data = await response.json();
-      if (data && data.downloadUrl) {
-        return {
-          url: data.downloadUrl,
-          filename: data.filename || `${videoId}.mp4`,
-          title: 'فيديو يوتيوب',
-          author: 'يوتيوب',
-          thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-          duration: '0:00',
-        };
-      }
-      throw new Error('No download URL');
-    },
-  ];
-  
-  // جرب كل خدمة
-  let lastError = null;
-  for (const service of services) {
-    try {
-      const result = await service();
-      if (result && result.url) {
-        return result;
-      }
-    } catch (error) {
-      console.warn('Service failed:', error.message);
-      lastError = error;
     }
+    
+    throw new Error('No video link found');
+  } catch (error) {
+    console.error('Parse error:', text);
+    throw new Error('فشل تحليل استجابة الخادم');
   }
-  
-  throw new Error(lastError?.message || 'فشلت جميع خدمات التحميل');
 }
 
 // ============================================
