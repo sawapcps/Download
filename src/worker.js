@@ -1,9 +1,7 @@
 // src/worker.js
 // ============================================
-// 🚀 Worker مع دعم التحميل المباشر باستخدام ytdl-core
+// 🚀 Worker مع دعم التحميل عبر خدمة خارجية
 // ============================================
-
-import ytdl from 'ytdl-core';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -41,88 +39,34 @@ function getYoutubeId(videoUrl) {
 }
 
 // ============================================
-// 📥 الحصول على رابط التحميل المباشر
+// 📥 الحصول على رابط التحميل (بدون ytdl-core)
 // ============================================
 async function getDirectDownloadUrl(videoUrl, quality) {
-  try {
-    const info = await ytdl.getInfo(videoUrl);
-    
-    // خريطة الجودة
-    const qualityMap = {
-      '1080p': '1080',
-      '720p': '720',
-      '480p': '480',
-      '360p': '360',
-      'audio': 'audio'
-    };
-    
-    const qualityValue = qualityMap[quality] || '720';
-    
-    let format;
-    if (qualityValue === 'audio') {
-      // جلب الصوت
-      format = ytdl.chooseFormat(info.formats, { 
-        quality: 'highestaudio',
-        filter: 'audioonly'
-      });
-    } else {
-      // جلب الفيديو مع الصوت
-      format = ytdl.chooseFormat(info.formats, { 
-        quality: qualityValue,
-        filter: 'audioandvideo'
-      });
-    }
-    
-    if (!format) {
-      throw new Error('No format found for quality: ' + quality);
-    }
-    
-    return {
-      url: format.url,
-      filename: `${info.videoDetails.title}.${format.container || 'mp4'}`,
-      title: info.videoDetails.title,
-      author: info.videoDetails.author.name,
-      thumbnail: info.videoDetails.thumbnails[0]?.url || null,
-      duration: info.videoDetails.lengthSeconds,
-    };
-  } catch (error) {
-    console.error('ytdl error:', error);
-    throw new Error('Failed to get download URL: ' + error.message);
-  }
-}
-
-// ============================================
-// 📊 جلب معلومات YouTube (بدون ytdl)
-// ============================================
-async function getYoutubeMetadata(videoUrl) {
   const videoId = getYoutubeId(videoUrl);
+  if (!videoId) throw new Error('Invalid YouTube URL');
   
-  if (!videoId) {
-    return { videoId: null, title: 'فيديو يوتيوب', author: 'يوتيوب', thumbnail: null };
-  }
+  // استخدام خدمة مجانية
+  const apiUrl = `https://api.savetube.me/api/v1/download?url=https://www.youtube.com/watch?v=${videoId}&quality=${quality}`;
   
   try {
-    const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`;
-    const response = await fetch(oembedUrl);
-    if (response.ok) {
-      const data = await response.json();
+    const response = await fetch(apiUrl);
+    const data = await response.json();
+    
+    if (data && data.downloadUrl) {
       return {
-        videoId,
-        title: data.title || 'فيديو يوتيوب',
-        author: data.author_name || 'يوتيوب',
-        thumbnail: data.thumbnail_url || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+        url: data.downloadUrl,
+        filename: `video_${videoId}.mp4`,
+        title: 'فيديو يوتيوب',
+        author: 'يوتيوب',
+        thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+        duration: '0:00',
       };
     }
+    throw new Error('No download URL returned');
   } catch (error) {
-    console.error('YouTube metadata error:', error);
+    console.error('Download error:', error);
+    throw new Error('فشل تحميل الفيديو');
   }
-  
-  return {
-    videoId,
-    title: 'فيديو يوتيوب',
-    author: 'يوتيوب',
-    thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-  };
 }
 
 // ============================================
@@ -174,32 +118,32 @@ export default {
         }, 400);
       }
       
-      const metadata = await getYoutubeMetadata(videoUrl);
+      const videoId = getYoutubeId(videoUrl);
       
       return jsonResponse({
         success: true,
         platform: 'youtube',
-        videoId: metadata.videoId,
+        videoId: videoId,
         url: videoUrl,
-        title: metadata.title || 'فيديو',
-        author: metadata.author || 'يوتيوب',
-        thumbnail: metadata.thumbnail || null,
+        title: 'فيديو يوتيوب',
+        author: 'يوتيوب',
+        thumbnail: videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null,
         duration: '0:00',
         formats: [
-          { quality: '1080p', resolution: '1920x1080', format: 'MP4', type: 'video', size: 'Auto' },
-          { quality: '720p', resolution: '1280x720', format: 'MP4', type: 'video', size: 'Auto' },
-          { quality: '480p', resolution: '854x480', format: 'MP4', type: 'video', size: 'Auto' },
-          { quality: '360p', resolution: '640x360', format: 'MP4', type: 'video', size: 'Auto' },
-          { quality: 'audio', bitrate: '320', format: 'MP3', type: 'audio', size: 'Auto' },
+          { quality: '1080p', resolution: '1920x1080', format: 'MP4', type: 'video' },
+          { quality: '720p', resolution: '1280x720', format: 'MP4', type: 'video' },
+          { quality: '480p', resolution: '854x480', format: 'MP4', type: 'video' },
+          { quality: '360p', resolution: '640x360', format: 'MP4', type: 'video' },
+          { quality: 'audio', bitrate: '320', format: 'MP3', type: 'audio' },
         ],
       });
     }
     
-    // ===== /api/download ===== (رابط تحميل مباشر)
+    // ===== /api/download =====
     if (path === '/api/download' && request.method === 'GET') {
       const videoUrl = url.searchParams.get('url');
       const format = url.searchParams.get('format') || 'video';
-      const quality = url.searchParams.get('quality') || '720p';
+      const quality = url.searchParams.get('quality') || '720';
       
       if (!videoUrl) {
         return jsonResponse({
@@ -209,9 +153,7 @@ export default {
       }
       
       try {
-        // إذا كان audio، استخدم quality = 'audio'
-        const qualityParam = format === 'audio' ? 'audio' : quality;
-        const result = await getDirectDownloadUrl(videoUrl, qualityParam);
+        const result = await getDirectDownloadUrl(videoUrl, quality);
         
         return jsonResponse({
           success: true,
@@ -224,7 +166,6 @@ export default {
           format: format,
           quality: quality,
         });
-        
       } catch (error) {
         console.error('Download error:', error);
         return jsonResponse({
@@ -232,37 +173,6 @@ export default {
           error: error.message || 'فشل تحميل الفيديو',
         }, 502);
       }
-    }
-    
-    // ===== /api/watch ===== (صفحة مشاهدة - احتياطي)
-    if (path === '/api/watch' && request.method === 'GET') {
-      const videoUrl = url.searchParams.get('url');
-      
-      if (!videoUrl) {
-        return new Response('URL parameter required', { status: 400 });
-      }
-      
-      const videoId = getYoutubeId(videoUrl);
-      if (!videoId) {
-        return new Response('Invalid YouTube URL', { status: 400 });
-      }
-      
-      const embedUrl = `https://www.youtube.com/embed/${videoId}`;
-      
-      return new Response(`
-<!DOCTYPE html>
-<html>
-<head><title>مشاهدة الفيديو</title></head>
-<body style="margin:0;background:#000;">
-  <iframe src="${embedUrl}" style="width:100vw;height:100vh;border:none;" allowfullscreen></iframe>
-</body>
-</html>
-      `, {
-        headers: {
-          'Content-Type': 'text/html; charset=utf-8',
-          ...CORS_HEADERS,
-        },
-      });
     }
     
     // ===== SPA =====
